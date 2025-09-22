@@ -1,19 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { taskService, projectService, userService } from '../services/api';
 
 function Tasks() {
-  const [tasks, setTasks] = useState([
-    { id: 1, title: 'Diseñar UI/UX', project: 'App Móvil', assignee: 'Juan', status: 'Completada', priority: 'Alta', dueDate: '2024-09-25' },
-    { id: 2, title: 'Configurar Base de Datos', project: 'Web Dashboard', assignee: 'María', status: 'En Progreso', priority: 'Alta', dueDate: '2024-09-30' },
-    { id: 3, title: 'Crear API REST', project: 'API REST', assignee: 'Carlos', status: 'Pendiente', priority: 'Media', dueDate: '2024-10-05' },
-    { id: 4, title: 'Testing de Aplicación', project: 'App Móvil', assignee: 'Ana', status: 'Pendiente', priority: 'Baja', dueDate: '2024-10-10' }
-  ]);
-
+  const [tasks, setTasks] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('Todas');
   const [filterPriority, setFilterPriority] = useState('Todas');
   const [formData, setFormData] = useState({
     title: '',
+    description: '',
     project: '',
     assignee: '',
     status: 'Pendiente',
@@ -22,11 +21,36 @@ function Tasks() {
   });
   const [errors, setErrors] = useState({});
 
+  // Cargar datos al montar el componente
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [tasksData, projectsData, usersData] = await Promise.all([
+        taskService.getAll(),
+        projectService.getAll(),
+        userService.getAll()
+      ]);
+      
+      setTasks(tasksData);
+      setProjects(projectsData);
+      setUsers(usersData);
+    } catch (error) {
+      console.error('Error cargando datos:', error);
+      alert('Error cargando datos: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Filtrar tareas
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         task.project.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         task.assignee.toLowerCase().includes(searchTerm.toLowerCase());
+                         (task.project && task.project.name && task.project.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         (task.assignee && task.assignee.name && task.assignee.name.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = filterStatus === 'Todas' || task.status === filterStatus;
     const matchesPriority = filterPriority === 'Todas' || task.priority === filterPriority;
     
@@ -43,12 +67,8 @@ function Tasks() {
       newErrors.title = 'El título debe tener al menos 3 caracteres';
     }
     
-    if (!formData.project.trim()) {
+    if (!formData.project) {
       newErrors.project = 'El proyecto es requerido';
-    }
-    
-    if (!formData.assignee.trim()) {
-      newErrors.assignee = 'El asignado es requerido';
     }
     
     if (!formData.dueDate) {
@@ -65,41 +85,77 @@ function Tasks() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (validateForm()) {
-      const newTask = {
-        id: tasks.length + 1,
-        ...formData
-      };
-      setTasks([...tasks, newTask]);
-      setFormData({
-        title: '',
-        project: '',
-        assignee: '',
-        status: 'Pendiente',
-        priority: 'Media',
-        dueDate: ''
-      });
-      setErrors({});
-      setShowForm(false);
+      try {
+        const taskData = {
+          title: formData.title,
+          description: formData.description,
+          project: formData.project,
+          assignee: formData.assignee || undefined,
+          status: formData.status,
+          priority: formData.priority,
+          dueDate: formData.dueDate
+        };
+        
+        const newTask = await taskService.create(taskData);
+        setTasks([...tasks, newTask]);
+        setFormData({
+          title: '',
+          description: '',
+          project: '',
+          assignee: '',
+          status: 'Pendiente',
+          priority: 'Media',
+          dueDate: ''
+        });
+        setErrors({});
+        setShowForm(false);
+        alert('Tarea creada exitosamente');
+      } catch (error) {
+        console.error('Error creando tarea:', error);
+        alert('Error creando tarea: ' + error.message);
+      }
     }
   };
 
-  const deleteTask = (id) => {
-    setTasks(tasks.filter(task => task.id !== id));
+  const deleteTask = async (id) => {
+    if (window.confirm('¿Estás seguro de eliminar esta tarea?')) {
+      try {
+        await taskService.delete(id);
+        setTasks(tasks.filter(task => task._id !== id));
+        alert('Tarea eliminada exitosamente');
+      } catch (error) {
+        console.error('Error eliminando tarea:', error);
+        alert('Error eliminando tarea: ' + error.message);
+      }
+    }
   };
 
-  const updateTaskStatus = (id, newStatus) => {
-    setTasks(tasks.map(task => 
-      task.id === id ? { ...task, status: newStatus } : task
-    ));
+  const updateTaskStatus = async (id, newStatus) => {
+    try {
+      const task = tasks.find(t => t._id === id);
+      const updatedTask = await taskService.update(id, {
+        ...task,
+        status: newStatus
+      });
+      
+      setTasks(tasks.map(t => t._id === id ? updatedTask : t));
+    } catch (error) {
+      console.error('Error actualizando tarea:', error);
+      alert('Error actualizando tarea: ' + error.message);
+    }
   };
 
-  // Auto-complete de proyectos
-  const projects = ['App Móvil', 'Web Dashboard', 'API REST', 'Sistema CRM'];
-  const users = ['Juan', 'María', 'Carlos', 'Ana', 'Luis', 'Sofia'];
+  if (loading) {
+    return (
+      <div className="tasks-page">
+        <div className="loading">Cargando tareas...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="tasks-page">
@@ -167,40 +223,43 @@ function Tasks() {
               </div>
               
               <div className="form-group">
-                <input
-                  type="text"
-                  placeholder="Proyecto"
+                <select
                   value={formData.project}
                   onChange={(e) => setFormData({...formData, project: e.target.value})}
-                  list="projects"
                   className={errors.project ? 'error' : ''}
-                />
-                <datalist id="projects">
+                >
+                  <option value="">Seleccionar Proyecto</option>
                   {projects.map(project => (
-                    <option key={project} value={project} />
+                    <option key={project._id} value={project._id}>
+                      {project.name}
+                    </option>
                   ))}
-                </datalist>
+                </select>
                 {errors.project && <span className="error-message">{errors.project}</span>}
               </div>
             </div>
 
+            <div className="form-group">
+              <input
+                type="text"
+                placeholder="Descripción (opcional)"
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+              />
+            </div>
+
             <div className="form-row">
-              <div className="form-group">
-                <input
-                  type="text"
-                  placeholder="Asignado a"
-                  value={formData.assignee}
-                  onChange={(e) => setFormData({...formData, assignee: e.target.value})}
-                  list="users"
-                  className={errors.assignee ? 'error' : ''}
-                />
-                <datalist id="users">
-                  {users.map(user => (
-                    <option key={user} value={user} />
-                  ))}
-                </datalist>
-                {errors.assignee && <span className="error-message">{errors.assignee}</span>}
-              </div>
+              <select
+                value={formData.assignee}
+                onChange={(e) => setFormData({...formData, assignee: e.target.value})}
+              >
+                <option value="">Sin asignar</option>
+                {users.map(user => (
+                  <option key={user._id} value={user._id}>
+                    {user.name}
+                  </option>
+                ))}
+              </select>
 
               <div className="form-group">
                 <input
@@ -250,7 +309,7 @@ function Tasks() {
 
       <div className="tasks-grid">
         {filteredTasks.map(task => (
-          <div key={task.id} className="task-card">
+          <div key={task._id} className="task-card">
             <div className="task-header">
               <h3>{task.title}</h3>
               <span className={`status ${task.status.toLowerCase().replace(' ', '-')}`}>
@@ -259,9 +318,10 @@ function Tasks() {
             </div>
             
             <div className="task-info">
-              <p><strong>Proyecto:</strong> {task.project}</p>
-              <p><strong>Asignado a:</strong> {task.assignee}</p>
-              <p><strong>Vencimiento:</strong> {task.dueDate}</p>
+              <p><strong>Proyecto:</strong> {task.project ? task.project.name : 'Sin proyecto'}</p>
+              <p><strong>Asignado a:</strong> {task.assignee ? task.assignee.name : 'Sin asignar'}</p>
+              <p><strong>Descripción:</strong> {task.description || 'Sin descripción'}</p>
+              <p><strong>Vencimiento:</strong> {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'Sin fecha'}</p>
               <span className={`priority priority-${task.priority.toLowerCase()}`}>
                 {task.priority} Prioridad
               </span>
@@ -270,7 +330,7 @@ function Tasks() {
             <div className="task-actions">
               <select 
                 value={task.status}
-                onChange={(e) => updateTaskStatus(task.id, e.target.value)}
+                onChange={(e) => updateTaskStatus(task._id, e.target.value)}
                 className="status-select"
               >
                 <option value="Pendiente">Pendiente</option>
@@ -280,7 +340,7 @@ function Tasks() {
               <button className="btn-edit">✏️ Editar</button>
               <button 
                 className="btn-delete" 
-                onClick={() => deleteTask(task.id)}
+                onClick={() => deleteTask(task._id)}
               >
                 🗑️ Eliminar
               </button>
@@ -288,6 +348,12 @@ function Tasks() {
           </div>
         ))}
       </div>
+
+      {filteredTasks.length === 0 && !loading && (
+        <div className="no-data">
+          <p>No se encontraron tareas</p>
+        </div>
+      )}
     </div>
   );
 }
