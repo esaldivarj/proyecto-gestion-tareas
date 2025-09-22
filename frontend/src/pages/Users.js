@@ -1,13 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { userService } from '../services/api';
 
 function Users() {
-  const [users, setUsers] = useState([
-    { id: 1, name: 'Juan Pérez', email: 'juan@ejemplo.com', role: 'Desarrollador', status: 'Activo', projects: ['App Móvil', 'API REST'], tasksCount: 5 },
-    { id: 2, name: 'María García', email: 'maria@ejemplo.com', role: 'Project Manager', status: 'Activo', projects: ['Web Dashboard'], tasksCount: 3 },
-    { id: 3, name: 'Carlos López', email: 'carlos@ejemplo.com', role: 'Designer', status: 'Inactivo', projects: ['App Móvil'], tasksCount: 2 },
-    { id: 4, name: 'Ana Rodríguez', email: 'ana@ejemplo.com', role: 'QA Tester', status: 'Activo', projects: ['Web Dashboard', 'API REST'], tasksCount: 4 }
-  ]);
-
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('Todos');
@@ -19,6 +15,24 @@ function Users() {
     status: 'Activo'
   });
   const [errors, setErrors] = useState({});
+
+  // Cargar usuarios al montar el componente
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      const data = await userService.getAll();
+      setUsers(data);
+    } catch (error) {
+      console.error('Error cargando usuarios:', error);
+      alert('Error cargando usuarios: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Filtrar usuarios
   const filteredUsers = users.filter(user => {
@@ -46,50 +60,72 @@ function Users() {
       newErrors.email = 'El email no tiene un formato válido';
     }
     
-    // Verificar email duplicado
-    if (users.some(user => user.email.toLowerCase() === formData.email.toLowerCase())) {
-      newErrors.email = 'Este email ya está registrado';
-    }
-    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (validateForm()) {
-      const newUser = {
-        id: users.length + 1,
-        ...formData,
-        projects: [],
-        tasksCount: 0
-      };
-      setUsers([...users, newUser]);
-      setFormData({
-        name: '',
-        email: '',
-        role: 'Desarrollador',
-        status: 'Activo'
-      });
-      setErrors({});
-      setShowForm(false);
+      try {
+        const newUser = await userService.create(formData);
+        setUsers([...users, newUser]);
+        setFormData({
+          name: '',
+          email: '',
+          role: 'Desarrollador',
+          status: 'Activo'
+        });
+        setErrors({});
+        setShowForm(false);
+        alert('Usuario creado exitosamente');
+      } catch (error) {
+        console.error('Error creando usuario:', error);
+        alert('Error creando usuario: ' + error.message);
+      }
     }
   };
 
-  const deleteUser = (id) => {
-    setUsers(users.filter(user => user.id !== id));
+  const deleteUser = async (id) => {
+    if (window.confirm('¿Estás seguro de eliminar este usuario?')) {
+      try {
+        await userService.delete(id);
+        setUsers(users.filter(user => user._id !== id));
+        alert('Usuario eliminado exitosamente');
+      } catch (error) {
+        console.error('Error eliminando usuario:', error);
+        alert('Error eliminando usuario: ' + error.message);
+      }
+    }
   };
 
-  const toggleUserStatus = (id) => {
-    setUsers(users.map(user => 
-      user.id === id 
-        ? { ...user, status: user.status === 'Activo' ? 'Inactivo' : 'Activo' }
-        : user
-    ));
+  const toggleUserStatus = async (id) => {
+    try {
+      const user = users.find(u => u._id === id);
+      const newStatus = user.status === 'Activo' ? 'Inactivo' : 'Activo';
+      
+      const updatedUser = await userService.update(id, {
+        ...user,
+        status: newStatus
+      });
+      
+      setUsers(users.map(u => u._id === id ? updatedUser : u));
+    } catch (error) {
+      console.error('Error actualizando usuario:', error);
+      alert('Error actualizando usuario: ' + error.message);
+    }
   };
 
   const roles = ['Desarrollador', 'Project Manager', 'Designer', 'QA Tester', 'DevOps'];
+
+  if (loading) {
+    return (
+      <div className="users-page">
+        <div className="loading">Cargando usuarios...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="users-page">
@@ -215,7 +251,7 @@ function Users() {
       {/* Lista de usuarios */}
       <div className="users-grid">
         {filteredUsers.map(user => (
-          <div key={user.id} className="user-card">
+          <div key={user._id} className="user-card">
             <div className="user-header">
               <div className="user-avatar">
                 {user.name.split(' ').map(n => n[0]).join('')}
@@ -234,37 +270,26 @@ function Users() {
 
             <div className="user-stats">
               <div className="stat">
-                <span className="stat-number">{user.projects.length}</span>
+                <span className="stat-number">{user.projects ? user.projects.length : 0}</span>
                 <span className="stat-label">Proyectos</span>
               </div>
               <div className="stat">
-                <span className="stat-number">{user.tasksCount}</span>
+                <span className="stat-number">0</span>
                 <span className="stat-label">Tareas</span>
               </div>
             </div>
 
-            {user.projects.length > 0 && (
-              <div className="user-projects">
-                <strong>Proyectos:</strong>
-                <div className="project-tags">
-                  {user.projects.map(project => (
-                    <span key={project} className="project-tag">{project}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div className="user-actions">
               <button 
                 className={`btn-toggle ${user.status === 'Activo' ? 'active' : 'inactive'}`}
-                onClick={() => toggleUserStatus(user.id)}
+                onClick={() => toggleUserStatus(user._id)}
               >
                 {user.status === 'Activo' ? '🔴 Desactivar' : '🟢 Activar'}
               </button>
               <button className="btn-edit">✏️ Editar</button>
               <button 
                 className="btn-delete" 
-                onClick={() => deleteUser(user.id)}
+                onClick={() => deleteUser(user._id)}
               >
                 🗑️ Eliminar
               </button>
@@ -272,6 +297,12 @@ function Users() {
           </div>
         ))}
       </div>
+
+      {filteredUsers.length === 0 && !loading && (
+        <div className="no-data">
+          <p>No se encontraron usuarios</p>
+        </div>
+      )}
     </div>
   );
 }
