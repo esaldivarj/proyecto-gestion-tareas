@@ -93,7 +93,7 @@ function Tasks() {
         const taskData = {
           title: formData.title,
           description: formData.description,
-          project: formData.project,
+          projectId: formData.project,
           assignee: formData.assignee || undefined,
           status: formData.status,
           priority: formData.priority,

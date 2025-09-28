@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import './App.css';
+import NotificationCenter from './components/NotificationCenter';
 import './styles/globals.css';
 import './styles/components.css';
+
 
 // Importar componentes
 import Dashboard from './pages/Dashboard';
@@ -27,33 +29,34 @@ function App() {
     }
   };
 
-  return (
+ return (
     <div className="App">
+<NotificationCenter />
       <header className="app-header">
         <nav className="navbar">
           <div className="nav-brand">
             <h1>📋 Gestor de Proyectos</h1>
           </div>
           <div className="nav-menu">
-            <button 
+            <button
               className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`}
               onClick={() => setCurrentPage('dashboard')}
-            >
+            >   
               Dashboard
             </button>
-            <button 
+            <button
               className={`nav-item ${currentPage === 'projects' ? 'active' : ''}`}
               onClick={() => setCurrentPage('projects')}
             >
               Proyectos
             </button>
-            <button 
+            <button
               className={`nav-item ${currentPage === 'tasks' ? 'active' : ''}`}
               onClick={() => setCurrentPage('tasks')}
             >
               Tareas
             </button>
-            <button 
+            <button
               className={`nav-item ${currentPage === 'users' ? 'active' : ''}`}
               onClick={() => setCurrentPage('users')}
             >
@@ -62,16 +65,17 @@ function App() {
           </div>
         </nav>
       </header>
-      
+            
       <main className="main-content">
         {renderPage()}
       </main>
-      
+              
       <footer className="app-footer">
         <p>&copy; 2024 Sistema de Gestión de Proyectos - Eduardo Esaldivar</p>
       </footer>
     </div>
   );
 }
-
+              
 export default App;
+
